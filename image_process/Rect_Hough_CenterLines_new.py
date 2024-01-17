@@ -22,46 +22,24 @@ class RectangleIntersectionDetector:
         contours, hierarchy = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
         # Filter contours based on area and hierarchy
-        rectangles = []
-        for i, cnt in enumerate(contours):
-            area = cv2.contourArea(cnt)
-            if area > 100 and hierarchy[0, i, 3] == -1:  # Filter based on area and no parent (no overlap)
-                rect = cv2.minAreaRect(cnt)
-                rectangles.append(rect)
+        rectangles = self.filter_rectangles(contours, hierarchy)
 
         if len(rectangles) >= 2:
-            # Draw rectangles
-            for i, rect in enumerate(rectangles):
-                box = np.intp(cv2.boxPoints(rect))
-                color = (0, 0, 255) if i == 0 else (255, 0, 0)
-                cv2.drawContours(cv_image, [box], 0, color, 2)
-
-                # Get the center and orientation of the rectangle
-                center, size, angle = rect
-
-                # Get the midpoints of the longer sides
-                side1_mid = ((box[0][0] + box[1][0]) / 2, (box[0][1] + box[1][1]) / 2)
-                side2_mid = ((box[2][0] + box[3][0]) / 2, (box[2][1] + box[3][1]) / 2)
-
-                # Draw the centerline
-                cv2.line(cv_image, tuple(map(int, side1_mid)), tuple(map(int, side2_mid)), (0, 255, 0), 2)
+            # Draw centerlines for each rectangle
+            for rect in rectangles:
+                self.draw_centerline(cv_image, rect)
 
             # Calculate intersection point of the centerlines
             intersection_point = self.find_intersection(rectangles[0], rectangles[1])
 
             if intersection_point is not None:
                 # Publish the intersection point
-                intersection_msg = Point()
-                intersection_msg.x = intersection_point[0]
-                intersection_msg.y = intersection_point[1]
+                intersection_msg = self.create_point_message(intersection_point)
                 rospy.loginfo("Intersection Point: {}".format(intersection_msg))
                 self.ur_pub.publish(intersection_msg)
 
                 # Draw a circle or cross at the intersection point
                 cv2.circle(cv_image, (int(intersection_point[0]), int(intersection_point[1])), 5, (255, 0, 0), -1)
-                # Alternatively, you can draw a cross
-                # cv2.drawMarker(cv_image, (int(intersection_point[0]), int(intersection_point[1])), (255, 0, 0),
-                #                markerType=cv2.MARKER_CROSS, markerSize=10, thickness=2)
 
             else:
                 rospy.logwarn("Unable to find intersection due to parallel lines.")
@@ -75,40 +53,67 @@ class RectangleIntersectionDetector:
         else:
             rospy.logwarn("Less than two rectangles detected. Unable to find intersection.")
 
-    def find_intersection(self, rect1, rect2):
-        # Get the midpoints of the longer sides for each rectangle
-        side1_mid1, side1_mid2 = self.get_longer_sides_midpoints(rect1)
-        side2_mid1, side2_mid2 = self.get_longer_sides_midpoints(rect2)
+    def draw_centerline(self, image, rect):
+        box = np.intp(cv2.boxPoints(rect))
+        box = np.array(box, dtype=np.int32)
 
-        # Calculate the intersection point as the intersection of the centerlines
-        intersection_point = self.line_intersection(side1_mid1, side1_mid2, side2_mid1, side2_mid2)
+        # Choose the first two points of the box as the longer side
+        side1 = (box[0], box[1])
+
+        # Calculate the midpoint of the longer side
+        mid = ((side1[0][0] + side1[1][0]) // 2, (side1[0][1] + side1[1][1]) // 2)
+
+        # Calculate the slope of the longer side
+        slope = (side1[1][1] - side1[0][1]) / (side1[1][0] - side1[0][0])
+
+        # Draw a line parallel to the longer side passing through the midpoint
+        length = int(max(np.linalg.norm(np.array(side1[0]) - np.array(side1[1])), 1))  # Corrected line
+
+        p1 = (int(mid[0] - length / 2), int(mid[1] - length / 2 * slope))
+        p2 = (int(mid[0] + length / 2), int(mid[1] + length / 2 * slope))
+
+        cv2.line(image, p1, p2, (0, 255, 0), 2)
+
+
+
+    def find_intersection(self, rect1, rect2):
+        # Get the midpoints of the centerlines for each rectangle
+        center1 = self.get_centerline_midpoint(rect1)
+        center2 = self.get_centerline_midpoint(rect2)
+
+        # Calculate the intersection point as the average of the centers
+        intersection_point = ((center1[0] + center2[0]) / 2, (center1[1] + center2[1]) / 2)
 
         return intersection_point
 
-    def get_longer_sides_midpoints(self, rect):
+    def get_centerline_midpoint(self, rect):
         box = np.intp(cv2.boxPoints(rect))
+        box = np.array(box, dtype=np.int32)
 
-        # Get the midpoints of the longer sides
-        side1_mid = ((box[0][0] + box[1][0]) / 2, (box[0][1] + box[1][1]) / 2)
-        side2_mid = ((box[2][0] + box[3][0]) / 2, (box[2][1] + box[3][1]) / 2)
+        # Choose the first two points of the box as the longer side
+        side1 = (box[0], box[1])
 
-        return side1_mid, side2_mid
+        # Calculate the midpoint of the longer side
+        mid = ((side1[0][0] + side1[1][0]) // 2, (side1[0][1] + side1[1][1]) // 2)
 
-    def line_intersection(self, line1_start, line1_end, line2_start, line2_end):
-        # Calculate the intersection point of two lines
-        x1, y1 = line1_start
-        x2, y2 = line1_end
-        x3, y3 = line2_start
-        x4, y4 = line2_end
+        return mid
 
-        den = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4)
-        if den == 0:
-            return None  # Lines are parallel
+    def filter_rectangles(self, contours, hierarchy):
+        # Filter contours based on area and hierarchy
+        rectangles = []
+        for i, cnt in enumerate(contours):
+            area = cv2.contourArea(cnt)
+            if area > 100 and hierarchy[0, i, 3] == -1:  # Filter based on area and no parent (no overlap)
+                rect = cv2.minAreaRect(cnt)
+                rectangles.append(rect)
 
-        px = ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) / den
-        py = ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) / den
+        return rectangles
 
-        return px, py
+    def create_point_message(self, point):
+        point_msg = Point()
+        point_msg.x = point[0]
+        point_msg.y = point[1]
+        return point_msg
 
 if __name__ == '__main__':
     # Initialize ROS node

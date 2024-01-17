@@ -29,39 +29,21 @@ class RectangleIntersectionDetector:
                 rect = cv2.minAreaRect(cnt)
                 rectangles.append(rect)
 
-        # Sort rectangles based on depth
-        rectangles.sort(key=lambda rect: self.get_depth_level(rect, depth_map))
-
         if len(rectangles) >= 2:
-            # Extract corners and midpoints for each rectangle
-            corners_list = []
-            midpoints_list = []
-
-            for rect in rectangles:
-                box = cv2.boxPoints(rect)
-                box = np.intp(box)
-
-                # Get the two shorter sides of the rectangle
-                side1_mid, side2_mid = self.get_two_shorter_sides_midpoints(box)
-
-                # Store corners and midpoints for each rectangle
-                corners_list.append(box)
-                midpoints_list.append((side1_mid, side2_mid))
-
-            # Draw rectangles and centerlines
-            for i, (rect, corners, midpoints) in enumerate(zip(rectangles, corners_list, midpoints_list)):
-                box = np.intp(corners)
-
-                # Draw the rectangle with a unique color for each rectangle
+            # Draw centerlines for each rectangle
+            for i, rect in enumerate(rectangles):
+                box = np.intp(cv2.boxPoints(rect))
                 color = (0, 0, 255) if i == 0 else (255, 0, 0)
-                cv2.drawContours(cv_image, [box], 0, color, 2)
 
-                # Draw the centerline
-                cv2.line(cv_image, tuple(map(int, midpoints[0])), tuple(map(int, midpoints[1])), (0, 255, 0), 2)
+                # Draw centerline parallel to the longer sides
+                side1_mid, side2_mid = self.get_longer_sides_midpoints(rect)
+                cv2.line(cv_image, tuple(map(int, side1_mid)), tuple(map(int, side2_mid)), color, 2)
 
-            # Calculate intersection point of the centerlines
-            intersection_point = self.find_intersection(midpoints_list[0][0], midpoints_list[0][1],
-                                                         midpoints_list[1][0], midpoints_list[1][1])
+            # Choose only the longer centerlines for intersection calculation
+            longer_centerlines = self.get_longer_centerlines(rectangles)
+
+            # Calculate intersection point of the longer centerlines
+            intersection_point = self.find_intersection(*longer_centerlines[0], *longer_centerlines[1])
 
             if intersection_point is not None:
                 # Publish the intersection point
@@ -73,9 +55,6 @@ class RectangleIntersectionDetector:
 
                 # Draw a circle or cross at the intersection point
                 cv2.circle(cv_image, (int(intersection_point[0]), int(intersection_point[1])), 5, (255, 0, 0), -1)
-                # Alternatively, you can draw a cross
-                cv2.drawMarker(cv_image, (int(intersection_point[0]), int(intersection_point[1])), (255, 0, 0),
-                               markerType=cv2.MARKER_CROSS, markerSize=10, thickness=2)
 
             else:
                 rospy.logwarn("Unable to find intersection due to parallel lines.")
@@ -88,19 +67,6 @@ class RectangleIntersectionDetector:
 
         else:
             rospy.logwarn("Less than two rectangles detected. Unable to find intersection.")
-
-    def get_two_shorter_sides_midpoints(self, box):
-        # Get the indices of the shorter sides of the rectangle
-        side_indices = np.argsort([np.linalg.norm(box[0] - box[1]), np.linalg.norm(box[1] - box[2]),
-                                   np.linalg.norm(box[2] - box[3]), np.linalg.norm(box[3] - box[0])])
-
-        # Get the midpoints of the two shorter sides
-        side1_mid = ((box[side_indices[0]][0] + box[side_indices[1]][0]) / 2,
-                     (box[side_indices[0]][1] + box[side_indices[1]][1]) / 2)
-        side2_mid = ((box[side_indices[2]][0] + box[side_indices[3]][0]) / 2,
-                     (box[side_indices[2]][1] + box[side_indices[3]][1]) / 2)
-
-        return side1_mid, side2_mid
 
     def find_intersection(self, line1_start, line1_end, line2_start, line2_end):
         # Calculate the intersection point of two lines
@@ -118,18 +84,24 @@ class RectangleIntersectionDetector:
 
         return px, py
 
-    def get_depth_level(self, rect, depth_map):
-        # Get the four corners of the rectangle
-        box = cv2.boxPoints(rect)
-        box = np.intp(box)
+    # def get_longer_sides_midpoints(self, rect):
+    #     box = np.intp(cv2.boxPoints(rect))
 
-        # Get the depth values at the corners
-        depths = [depth_map[corner[1], corner[0]] for corner in box]
+    #     # Get the midpoints of the longer sides
+    #     side1_mid = ((box[0][0] + box[1][0]) / 2, (box[0][1] + box[1][1]) / 2)
+    #     side2_mid = ((box[2][0] + box[3][0]) / 2, (box[2][1] + box[3][1]) / 2)
 
-        # Use the average depth as the depth level for the rectangle
-        depth_level = np.mean(depths)
+    #     return side1_mid, side2_mid
 
-        return depth_level
+    def get_longer_centerlines(self, rectangles):
+        # Calculate lengths of centerlines for each rectangle
+        centerlines_lengths = [np.linalg.norm(np.array(self.get_longer_sides_midpoints(rect))) for rect in rectangles]
+
+        # Choose the two centerlines with the maximum lengths
+        indices_of_longest_centerlines = np.argsort(centerlines_lengths)[-2:]
+        longer_centerlines = [self.get_longer_sides_midpoints(rectangles[i]) for i in indices_of_longest_centerlines]
+
+        return longer_centerlines
 
 if __name__ == '__main__':
     # Initialize ROS node

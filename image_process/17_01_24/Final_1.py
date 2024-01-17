@@ -74,8 +74,8 @@ class RectangleIntersectionDetector:
                 # Draw a circle or cross at the intersection point
                 cv2.circle(cv_image, (int(intersection_point[0]), int(intersection_point[1])), 5, (255, 0, 0), -1)
                 # Alternatively, you can draw a cross
-                cv2.drawMarker(cv_image, (int(intersection_point[0]), int(intersection_point[1])), (255, 0, 0),
-                               markerType=cv2.MARKER_CROSS, markerSize=10, thickness=2)
+                # cv2.drawMarker(cv_image, (int(intersection_point[0]), int(intersection_point[1])), (255, 0, 0),
+                #                markerType=cv2.MARKER_CROSS, markerSize=10, thickness=2)
 
             else:
                 rospy.logwarn("Unable to find intersection due to parallel lines.")
@@ -123,6 +123,10 @@ class RectangleIntersectionDetector:
         box = cv2.boxPoints(rect)
         box = np.intp(box)
 
+        # Clip the corner coordinates to ensure they are within the valid range
+        box[:, 0] = np.clip(box[:, 0], 0, depth_map.shape[1] - 1)
+        box[:, 1] = np.clip(box[:, 1], 0, depth_map.shape[0] - 1)
+
         # Get the depth values at the corners
         depths = [depth_map[corner[1], corner[0]] for corner in box]
 
@@ -131,13 +135,14 @@ class RectangleIntersectionDetector:
 
         return depth_level
 
+
 if __name__ == '__main__':
     # Initialize ROS node
     rospy.init_node('rectangle_intersection_detector', anonymous=True)
 
     # Specify the path to the image and depth map files
-    image_path = '/home/geetham/Downloads/8_rgb.jpg'  # Replace with the actual path to your image file
-    depth_map_path = '/home/geetham/Downloads/8_depth.png'  # Replace with the actual path to your depth map file
+    image_path = '/home/geetham/Downloads/2.jpg'  # Replace with the actual path to your image file
+    depth_map_path = '/home/geetham/Downloads/3.jpg'  # Replace with the actual path to your depth map file
 
     # Create RectangleIntersectionDetector instance
     rid = RectangleIntersectionDetector()

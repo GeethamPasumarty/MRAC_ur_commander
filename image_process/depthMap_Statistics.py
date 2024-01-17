@@ -2,7 +2,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 
-depth_map = cv2.imread('/home/geetham/Downloads/7_depth.jpg', cv2.IMREAD_GRAYSCALE)
+depth_map = cv2.imread('/home/geetham/Downloads/8_depth.png', cv2.IMREAD_GRAYSCALE)
 plt.imshow(depth_map, cmap='gray')
 plt.colorbar()
 plt.show()
