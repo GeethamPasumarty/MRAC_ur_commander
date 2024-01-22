@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
 from geometry_msgs.msg import Point
 import rospy
 
@@ -81,10 +82,13 @@ class RectangleIntersectionDetector:
                 rospy.logwarn("Unable to find intersection due to parallel lines.")
 
             # Display the image with rectangles, centerlines, and intersection point
-            cv2.imshow("Image with Rectangles, Centerlines, and Intersection", cv_image)
-            cv2.imshow("Depth Map", depth_map)  # Visualize the depth map
-            cv2.waitKey(0)  # Wait until any key is pressed
-            cv2.destroyAllWindows()
+            # cv2.imshow("Image with Rectangles, Centerlines, and Intersection", cv_image)
+            # cv2.imshow("Depth Map", depth_map)  # Visualize the depth map
+            # cv2.waitKey(0)  # Wait until any key is pressed
+            # cv2.destroyAllWindows()
+            plt.imshow(cv2.cvtColor(cv_image, cv2.COLOR_BGR2RGB))
+            plt.title("Image with Rectangles, Centerlines, and Intersection")
+            plt.show()
 
         else:
             rospy.logwarn("Less than two rectangles detected. Unable to find intersection.")

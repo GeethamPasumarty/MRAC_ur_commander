@@ -8,7 +8,8 @@
     "python.analysis.extraPaths": [
         "/dev_ws/devel/lib/python3/dist-packages",
         "/opt/ros/noetic/lib/python3/dist-packages",
-        "./commander/src"
+        "./commander/src",
+        "./commander/src/commander"
     ],
     "ros.distro": "noetic",
     "files.exclude": {

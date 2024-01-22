@@ -25,15 +25,29 @@ class RectangleIntersectionDetector:
         rectangles = []
         for i, cnt in enumerate(contours):
             area = cv2.contourArea(cnt)
+            print((area))
             if area > 100 and hierarchy[0, i, 3] == -1:  # Filter based on area and no parent (no overlap)
                 rect = cv2.minAreaRect(cnt)
                 rectangles.append(rect)
+
+
 
         if len(rectangles) >= 2:
             # Draw centerlines for each rectangle
             for i, rect in enumerate(rectangles):
                 box = np.intp(cv2.boxPoints(rect))
                 color = (0, 0, 255) if i == 0 else (255, 0, 0)
+
+                for k, point in enumerate(box):
+                    if k ==0:
+                        colour = (0,0,255)
+                    elif k == 1:
+                        colour = (0,255,0)
+                    elif k ==2:
+                        colour = (255,0,0)
+                    else:
+                        colour = (0,255,255)
+                    cv2.circle(cv_image, (int(point[0]), int(point[1])), 5, colour, -1)
 
                 # Draw centerline parallel to the longer sides
                 side1_mid, side2_mid = self.get_longer_sides_midpoints(rect)
@@ -54,7 +68,7 @@ class RectangleIntersectionDetector:
                 self.ur_pub.publish(intersection_msg)
 
                 # Draw a circle or cross at the intersection point
-                cv2.circle(cv_image, (int(intersection_point[0]), int(intersection_point[1])), 5, (255, 0, 0), -1)
+                cv2.circle(cv_image, (int(intersection_point[0]), int(intersection_point[1])), 5, (235, 52, 219), -1)
 
             else:
                 rospy.logwarn("Unable to find intersection due to parallel lines.")
@@ -84,14 +98,20 @@ class RectangleIntersectionDetector:
 
         return px, py
 
-    # def get_longer_sides_midpoints(self, rect):
-    #     box = np.intp(cv2.boxPoints(rect))
+    def get_longer_sides_midpoints(self, rect):
+        box = np.intp(cv2.boxPoints(rect))
 
-    #     # Get the midpoints of the longer sides
-    #     side1_mid = ((box[0][0] + box[1][0]) / 2, (box[0][1] + box[1][1]) / 2)
-    #     side2_mid = ((box[2][0] + box[3][0]) / 2, (box[2][1] + box[3][1]) / 2)
+        #Get the midpoints of the longer sides
+        if box[1][0]-box[0][0] < box[2][0] - box[1][0] :
+            side1_mid = ((box[0][0] + box[1][0]) / 2, (box[0][1] + box[1][1]) / 2)
+            side2_mid = ((box[2][0] + box[3][0]) / 2, (box[2][1] + box[3][1]) / 2)
 
-    #     return side1_mid, side2_mid
+        else :
+            side1_mid = ((box[1][0] + box[2][0]) / 2, (box[1][1] + box[2][1]) / 2)
+            side2_mid = ((box[0][0] + box[3][0]) / 2, (box[0][1] + box[3][1]) / 2)
+
+
+        return side1_mid, side2_mid
 
     def get_longer_centerlines(self, rectangles):
         # Calculate lengths of centerlines for each rectangle
